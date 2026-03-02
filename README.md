@@ -22,46 +22,73 @@
   - `hd_type1..8` : 숫자(1~8)
 
 ## 풀이 로직
-1) **기본 확정 규칙**
-- 숫자칸 기준, 남은 지뢰 수 = 0 → 인접한 닫힌 칸 전부 **오픈**
-- 숫자칸 기준, 남은 지뢰 수 = 인접 닫힌 칸 수 → 인접 닫힌 칸 전부 **깃발**
 
-2) **고급 규칙: 부분집합(Subset) 추론**
-- 인접한 두 숫자칸의 “닫힌 이웃 집합”이 포함관계일 때,
-  차집합 영역을 이용해 안전/지뢰를 추가로 확정 (예: 1-2-1, 1-1 변형 패턴 등)
+### 1) 기본 확정 규칙
+- 숫자칸 기준, 남은 지뢰 수 = 0 → 인접한 닫힌 칸 전부 오픈
+- 숫자칸 기준, 남은 지뢰 수 = 인접 닫힌 칸 수 → 인접 닫힌 칸 전부 깃발
 
-3) **추측(확정이 끊겼을 때)**
-- 프론티어(숫자칸과 인접한 닫힌 칸)에서 간단한 지역 위험도  
-  `남은 지뢰 수 / 닫힌 칸 수` 를 계산해 가장 낮은 위험도의 칸을 선택
+### 2) 고급 규칙: 부분집합(Subset) 추론
+- 인접한 두 숫자칸의 닫힌 이웃 집합이 포함관계일 때  
+  차집합 영역을 이용해 안전/지뢰를 추가 확정  
+  (예: 1-2-1, 1-1 변형 패턴 등)
 
-## 요구 사항
-- Python 3.10+
-- Playwright
+### 3) 추측 (확정이 끊겼을 때)
+- 프론티어에서 `남은 지뢰 수 / 닫힌 칸 수` 계산 후  
+  가장 낮은 위험도 선택
 
-## 설치
+⚠️ 확정 규칙과 부분집합 추론이 모두 끝나면  
+확률 기반으로 플레이하므로 항상 클리어를 보장하지 않습니다.
+
+## 기본 난이도 변경 방법
+
+`minesweeper.html` 맨 아래에서:
+
+```javascript
+initGame('expert');
+```
+
+을 아래 중 하나로 변경:
+
+```javascript
+initGame('beginner');
+initGame('intermediate');
+initGame('expert');
+```
+
+## 아나콘다(Conda) 환경 셋업
+
 ```bash
+conda create -n minesweeper-bot python=3.10 -y
+conda activate minesweeper-bot
+
 pip install playwright
 playwright install
 ```
 
 ## 실행
-1) `minesweeper.html`과 `mine-local.py`를 같은 폴더에 둡니다.
 
-2) `mine-local.py`에서 로컬 파일 URL을 필요 시 수정합니다.
-```py
-URL = "file:///C:/path/to/minesweeper.html"
-```
-
-3) 실행:
 ```bash
 python mine-local.py
 ```
 
 Chromium 창이 열리고 솔버가 자동으로 플레이를 시작합니다.
 
-## 참고
-- 본 프로젝트는 **로컬 실험/학습/연구 목적**입니다.
-- 외부 서비스/웹사이트에 대한 자동화는 해당 사이트 정책을 반드시 준수해 주세요.
+## 중요 참고 사항 ⚠️
+
+- 본 프로젝트는 로컬 실험/학습 목적입니다.
+- 이 솔버를 https://minesweeper.online/ 에서 사용할 경우  
+  자동화 감지로 인해 IP Block을 당할 수 있습니다.
+- 반드시 로컬 `minesweeper.html` 환경에서만 사용하세요.
+
+## Contribution 🤝
+
+- 새로운 추론 로직 (예: 완전 확률 계산, CSP 기반 풀이 등)
+- 더 정교한 Guess 전략
+- 성능 최적화
+- UI 개선
+- 통계/데이터 수집 기능 추가
+
+모든 기여를 환영합니다. PR 및 Issue 자유롭게 남겨주세요.
 
 </details>
 
@@ -70,48 +97,100 @@ Chromium 창이 열리고 솔버가 자동으로 플레이를 시작합니다.
 <details>
 <summary><strong>English</strong></summary>
 
-A local **Minesweeper web page** plus a **Python Playwright solver bot** that plays it automatically.  
-It uses deterministic rules, subset inference, and a simple probability-based guessing fallback.
+This project consists of a **local Minesweeper web implementation** and a **Python Playwright solver bot** that automatically plays the game.
 
-## Contents
-- `minesweeper.html` — Local Minesweeper (solver-friendly DOM)
-- `mine-local.py` — Playwright solver/bot
+The solver mimics human-like reasoning using deterministic logic, subset inference, and a simple probability-based fallback strategy.
 
-## How it works (DOM contract)
+## Project Structure
+
+- `minesweeper.html` — A solver-friendly local Minesweeper implementation
+- `mine-local.py` — Playwright-based automated solver
+
+## How It Works (DOM Contract)
+
+The solver reconstructs the board state by reading DOM elements:
+
 - Cell id: `cell_{x}_{y}`
 - Attributes: `data-x`, `data-y`
 - State classes:
-  - `hd_closed` : hidden
-  - `hd_opened` : opened
-  - `hd_flag` : flagged
-  - `hd_type1..8` : opened number (1–8)
+  - `hd_closed`  → hidden cell
+  - `hd_opened`  → revealed cell
+  - `hd_flag`    → flagged cell
+  - `hd_type1..8` → revealed number (1–8)
 
-## Solving logic
-1) Deterministic rules  
-2) Subset inference (set containment / difference)  
-3) Guessing fallback (simple local risk heuristic)
+## Solving Logic
 
-## Requirements
-- Python 3.10+
-- Playwright
+### 1) Deterministic Rules
+- If remaining mines = 0 → reveal all adjacent hidden cells
+- If remaining mines = number of adjacent hidden cells → flag them all
 
-## Setup
+### 2) Subset Inference (Advanced Rule)
+- If the hidden-neighbor set of one number is a subset of another,
+  the difference set can be inferred as either safe or mines  
+  (solves patterns such as 1-2-1 and similar configurations)
+
+### 3) Guessing (Fallback Strategy)
+- When no deterministic moves remain,
+  the solver estimates local risk using:
+  
+  remaining_mines / hidden_neighbors
+  
+  and selects the cell with the lowest estimated probability.
+
+⚠️ Once deterministic and subset-based rules are exhausted,
+the solver switches to probability-based guessing.
+Therefore, a win is **not guaranteed**.
+
+## Changing Default Difficulty
+
+At the bottom of `minesweeper.html`, change:
+
+```javascript
+initGame('expert');
+```
+
+to one of:
+
+```javascript
+initGame('beginner');
+initGame('intermediate');
+initGame('expert');
+```
+
+## Conda Environment Setup
+
 ```bash
+conda create -n minesweeper-bot python=3.10 -y
+conda activate minesweeper-bot
+
 pip install playwright
 playwright install
 ```
 
 ## Run
-1) Keep `minesweeper.html` and `mine-local.py` in the same folder.
 
-2) Update the local file URL in `mine-local.py` if needed:
-```py
-URL = "file:///C:/path/to/minesweeper.html"
-```
-
-3) Run:
 ```bash
 python mine-local.py
 ```
+
+A Chromium window will open and the solver will begin playing automatically.
+
+## Important Notes ⚠️
+
+- This project is intended for local experimentation and research.
+- Using this solver on third-party websites (e.g., https://minesweeper.online/) may result in IP blocking due to automation detection.
+- Please use it only with the provided local `minesweeper.html`.
+
+## Contribution 🤝
+
+Contributions are welcome, including:
+
+- Advanced inference logic (e.g., exact probability computation, CSP-based solving)
+- Improved guessing heuristics
+- Performance optimization
+- UI improvements
+- Data logging and statistical analysis features
+
+Feel free to open issues or submit pull requests.
 
 </details>
