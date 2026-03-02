@@ -13,18 +13,43 @@
 - **Start Solver**: 게임을 자동으로 시작하고 끝까지 플레이합니다.
 - **Stop Solver**: 자동 플레이를 즉시 중단합니다.
 
-![Start/Stop Solver Demo](start-stop%20solver.mp4)
+![Start/Stop Solver Demo](./source/start-stop-solver.gif)
 
 ### 2) 실시간 힌트 시스템 (Live Hint & Probability)
 마우스 오버만으로 각 칸의 안전 확률을 실시간으로 계산하여 보여줍니다.
 - **Hint 버튼**: 힌트 모드를 켜고 끌 수 있습니다.
 - **안전 확률 표시**: 논리적으로 확정된 칸은 `100.0% Safe` 또는 `0.0% Safe`로 표시하며, 불확실한 칸은 수학적 확률을 계산하여 보여줍니다.
 
-![Hint System Demo](hint.mp4)
+![Hint System Demo](./source/hint.gif)
 
 ### 3) 사용자 편의 기능
 - **Space 키 재시작**: 게임 중 언제든 스페이스바를 눌렀다 떼면 새로운 게임이 시작됩니다 (스마일 아이콘 클릭과 동일).
 - **시각적 피드백**: 숫자 칸을 꾹 누르고 있으면 주변 칸들이 함께 눌리는 효과를 주어 클래식 지뢰찾기의 조작감을 재현했습니다.
+
+---
+
+## 🛠️ 실행 방법 (Setup)
+
+### 1) 브라우저 내장 솔버 (추천)
+**별도의 설치가 필요 없습니다.**  
+`minesweeper.html` 파일을 크롬(Chrome)이나 에지(Edge) 등 최신 브라우저로 열기만 하면 모든 기능을 즉시 사용할 수 있습니다.
+
+### 2) 외부 파이썬 솔버 (Advanced)
+`mine-local.py`를 통해 브라우저를 외부에서 제어하고 싶다면 아래 환경 설정이 필요합니다.
+
+**아나콘다(Conda) 환경 셋업:**
+```bash
+conda create -n minesweeper-bot python=3.10 -y
+conda activate minesweeper-bot
+
+pip install playwright
+playwright install
+```
+
+**실행:**
+```bash
+python mine-local.py
+```
 
 ---
 
@@ -75,18 +100,43 @@ Run the solver with simple button clicks on the web page.
 - **Start Solver**: Automatically starts and plays the game to completion.
 - **Stop Solver**: Immediately halts the automated play.
 
-![Start/Stop Solver Demo](start-stop%20solver.mp4)
+![Start/Stop Solver Demo](./source/start-stop-solver.gif)
 
 ### 2) Live Hint System (Safety Probability)
 Calculate and display the safety probability of each cell on hover.
 - **Hint Button**: Toggle hint mode on/off.
 - **Safety Probability**: Displays `100.0% Safe` or `0.0% Safe` for deterministic cells, and mathematical probability for uncertain ones.
 
-![Hint System Demo](hint.mp4)
+![Hint System Demo](./source/hint.gif)
 
 ### 3) Quality of Life Improvements
 - **Space Key Restart**: Press and release the Space key to restart the game at any time (same as clicking the smiley).
 - **Visual Feedback**: Holding down a number cell simulates the "pressed" state for neighbors, mimicking the classic Minesweeper feel.
+
+---
+
+## 🛠️ Setup & Usage
+
+### 1) In-Browser Solver (Recommended)
+**No installation required.**  
+Simply open `minesweeper.html` in any modern browser (Chrome, Edge, etc.) to use all features immediately.
+
+### 2) External Python Solver (Advanced)
+If you wish to control the browser externally via `mine-local.py`, you need to set up the environment:
+
+**Conda Environment Setup:**
+```bash
+conda create -n minesweeper-bot python=3.10 -y
+conda activate minesweeper-bot
+
+pip install playwright
+playwright install
+```
+
+**Run:**
+```bash
+python mine-local.py
+```
 
 ---
 
