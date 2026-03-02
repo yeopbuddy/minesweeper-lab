@@ -32,7 +32,7 @@
 
 ### 1) 브라우저 내장 솔버 (추천)
 **별도의 설치가 필요 없습니다.**  
-`minesweeper.html` 파일을 크롬(Chrome)이나 에지(Edge) 등 최신 브라우저로 열기만 하면 모든 기능을 즉시 사용할 수 있습니다.
+`index.html` 파일을 크롬(Chrome)이나 에지(Edge) 등 최신 브라우저로 열기만 하면 모든 기능을 즉시 사용할 수 있습니다.
 
 ### 2) 외부 파이썬 솔버 (Advanced)
 `mine-local.py`를 통해 브라우저를 외부에서 제어하고 싶다면 아래 환경 설정이 필요합니다.
@@ -54,7 +54,7 @@ python mine-local.py
 ---
 
 ## 구성
-- `minesweeper.html` — 브라우저 내장 솔버 및 힌트 기능이 포함된 지뢰찾기 웹 페이지
+- `index.html` — 브라우저 내장 솔버 및 힌트 기능이 포함된 지뢰찾기 웹 페이지
 - `mine-local.py` — Playwright 기반 외부 자동 솔버/봇 (레거시 지원)
 - `hint.mp4`, `start-stop solver.mp4` — 기능 시연 영상
 
@@ -74,7 +74,7 @@ python mine-local.py
 - **난이도 선택**: 상단 메뉴의 Beginner, Intermediate, Expert 버튼을 사용하세요.
 - **게임 재시작**: 웃는 얼굴 아이콘을 클릭하거나 **Space** 키를 사용하세요.
 - **자동 플레이**: `Start Solver`를 누르세요. (힌트 모드를 켜면 솔버가 자동으로 중단됩니다.)
-- **주의**: 이 솔버는 로컬 `minesweeper.html`을 위해 설계되었습니다. 외부 사이트에서 사용 시 자동화 감지로 차단될 수 있으니 주의하세요.
+- **주의**: 이 솔버는 로컬 `index.html`을 위해 설계되었습니다. 외부 사이트에서 사용 시 자동화 감지로 차단될 수 있으니 주의하세요.
 
 ## Contribution 🤝
 - 더 정교한 확률 계산 알고리즘
@@ -119,7 +119,7 @@ Calculate and display the safety probability of each cell on hover.
 
 ### 1) In-Browser Solver (Recommended)
 **No installation required.**  
-Simply open `minesweeper.html` in any modern browser (Chrome, Edge, etc.) to use all features immediately.
+Simply open `index.html` in any modern browser (Chrome, Edge, etc.) to use all features immediately.
 
 ### 2) External Python Solver (Advanced)
 If you wish to control the browser externally via `mine-local.py`, you need to set up the environment:
@@ -141,7 +141,7 @@ python mine-local.py
 ---
 
 ## Project Structure
-- `minesweeper.html` — Minesweeper with built-in solver and hint features
+- `index.html` — Minesweeper with built-in solver and hint features
 - `mine-local.py` — Playwright-based external solver (legacy support)
 - `hint.mp4`, `start-stop solver.mp4` — Feature demonstration videos
 
@@ -161,7 +161,7 @@ python mine-local.py
 - **Difficulty**: Choose Beginner, Intermediate, or Expert from the top menu.
 - **Restart**: Click the smiley or press the **Space** key.
 - **Auto-play**: Click `Start Solver`. (Hint mode will automatically stop the solver.)
-- **Warning**: This solver is designed for the local `minesweeper.html`. Use on external sites at your own risk.
+- **Warning**: This solver is designed for the local `index.html`. Use on external sites at your own risk.
 
 ## Contribution 🤝
 Contributions such as improved probability algorithms, UI themes, or statistical analysis tools are welcome. Feel free to open issues or submit pull requests.
