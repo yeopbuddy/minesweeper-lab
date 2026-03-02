@@ -98,7 +98,7 @@
             cursor: pointer;
             background-color: #c0c0c0;
         }
-        #smiley:active {
+        #smiley:active, #smiley.pressed {
             border-color: #808080 #ffffff #ffffff #808080;
             padding: 1px 0 0 1px;
         }
@@ -124,6 +124,7 @@
 
         .hd_closed { border-color: #ffffff #808080 #808080 #ffffff; }
         .hd_opened { border: 1px solid #808080; background-color: #c0c0c0; }
+        .hd_active { border: 1px solid #808080; background-color: #c0c0c0; }
 
         .hd_type1 { color: #0000ff; } .hd_type2 { color: #008000; } .hd_type3 { color: #ff0000; }
         .hd_type4 { color: #000080; } .hd_type5 { color: #800000; } .hd_type6 { color: #008080; }
@@ -156,7 +157,13 @@
         <button onclick="initGame('beginner')">Beginner</button>
         <button onclick="initGame('intermediate')">Intermediate</button>
         <button onclick="initGame('expert')">Expert</button>
+        <span style="margin-left: 20px; border-left: 1px solid #808080; padding-left: 10px;"></span>
+        <button id="btn-start-solver" onclick="startSolver()" style="background: #e1e1e1;">Start Solver</button>
+        <button id="btn-stop-solver" onclick="stopSolver()" disabled>Stop Solver</button>
+        <button id="btn-hint" onclick="toggleHint()" style="background: #e1e1e1;">Hint: OFF</button>
     </div>
+
+    <div id="hint-overlay" style="position: fixed; pointer-events: none; background: rgba(0, 128, 0, 0.9); color: white; padding: 2px 6px; border-radius: 4px; font-size: 12px; font-weight: bold; z-index: 1000; display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.2);"></div>
 
     <div id="result-banner"></div>
 
@@ -211,14 +218,84 @@
         let currentDifficulty = 'beginner';
         let board = [], revealedCount = 0, flaggedCount = 0, isGameOver = false, isFirstClick = true;
         let timerRequest = null, startTime = 0, total3BV = 0, clicks = 0;
+        let solverInterval = null;
+        let isHintActive = false;
 
         function setSmiley(type) { document.getElementById('smiley').innerHTML = ICONS[type]; }
+
+        function toggleHint() {
+            isHintActive = !isHintActive;
+            if (isHintActive) stopSolver();
+            const btn = document.getElementById('btn-hint');
+            btn.textContent = `Hint: ${isHintActive ? 'ON' : 'OFF'}`;
+            btn.style.background = isHintActive ? '#90ee90' : '#e1e1e1';
+            if (!isHintActive) hideHint();
+        }
+
+        function calculateSafety(r, c) {
+            const cell = board[r][c];
+            if (cell.isRevealed || cell.isFlagged) return null;
+
+            // 1. Run deterministic solver logic first
+            const moves = findSolverMoves();
+            if (moves.toReveal.some(m => m.r === r && m.c === c)) return 100.0;
+            if (moves.toFlag.some(m => m.r === r && m.c === c)) return 0.0;
+
+            // 2. If not deterministic, calculate probability
+            let minRisk = 1.0;
+            let foundConstraint = false;
+            
+            getNeighbors(r, c).forEach(n => {
+                if (n.isRevealed && n.neighborCount > 0) {
+                    const nbNeighbors = getNeighbors(n.r, n.c);
+                    const closed = nbNeighbors.filter(nn => !nn.isRevealed && !nn.isFlagged);
+                    const flags = nbNeighbors.filter(nn => nn.isFlagged).length;
+                    const remaining = n.neighborCount - flags;
+                    
+                    if (closed.length > 0) {
+                        const risk = remaining / closed.length;
+                        // Use the most constrained risk (highest risk or lowest risk if it proves something)
+                        // Actually, for probability, we'll take the highest risk neighbor to be "safe"
+                        if (risk < minRisk) minRisk = risk; 
+                        foundConstraint = true;
+                    }
+                }
+            });
+
+            if (!foundConstraint) {
+                const { rows, cols, mines } = CONFIG[currentDifficulty];
+                const remainingMines = mines - flaggedCount;
+                const remainingClosed = (rows * cols) - revealedCount - flaggedCount;
+                const globalRisk = remainingClosed > 0 ? remainingMines / remainingClosed : 0;
+                return Math.max(0, (1 - globalRisk) * 100);
+            }
+
+            // Return 1 - minRisk to show safety
+            return Math.max(0, (1 - minRisk) * 100);
+        }
+
+        function showHint(r, c, e) {
+            if (!isHintActive || isGameOver) return;
+            const safety = calculateSafety(r, c);
+            if (safety === null) return;
+
+            const overlay = document.getElementById('hint-overlay');
+            overlay.textContent = `${safety.toFixed(1)}% Safe`;
+            overlay.style.display = 'block';
+            overlay.style.left = `${e.clientX + 10}px`;
+            overlay.style.top = `${e.clientY + 10}px`;
+        }
+
+        function hideHint() {
+            document.getElementById('hint-overlay').style.display = 'none';
+        }
 
         function initGame(difficulty) {
             if (difficulty) currentDifficulty = difficulty;
             const { rows, cols, mines } = CONFIG[currentDifficulty];
             
             // Critical: Reset all state
+            stopSolver();
             cancelAnimationFrame(timerRequest);
             timerRequest = null;
             startTime = 0; clicks = 0; total3BV = 0;
@@ -246,8 +323,19 @@
                     cellEl.id = `cell_${c}_${r}`;
                     
                     cellEl.addEventListener('mousedown', (e) => {
-                        if (isGameOver || board[r][c].isRevealed || board[r][c].isFlagged) return;
-                        if (e.button === 0) setSmiley('worried');
+                        if (isGameOver) return;
+                        if (e.button === 0) {
+                            setSmiley('worried');
+                            // Visual feedback for chording (hold)
+                            if (board[r][c].isRevealed && board[r][c].neighborCount > 0) {
+                                getNeighbors(r, c).forEach(n => {
+                                    if (!n.isRevealed && !n.isFlagged) {
+                                        n.el.classList.remove('hd_closed');
+                                        n.el.classList.add('hd_active');
+                                    }
+                                });
+                            }
+                        }
                     });
 
                     cellEl.addEventListener('click', () => {
@@ -261,8 +349,11 @@
                         handleFlag(r, c);
                     });
 
+                    cellEl.addEventListener('mouseenter', (e) => showHint(r, c, e));
+                    cellEl.addEventListener('mouseleave', hideHint);
+
                     boardEl.appendChild(cellEl);
-                    board[r][c] = { isMine: false, isRevealed: false, isFlagged: false, neighborCount: 0, el: cellEl };
+                    board[r][c] = { r, c, isMine: false, isRevealed: false, isFlagged: false, neighborCount: 0, el: cellEl };
                 }
             }
         }
@@ -340,7 +431,7 @@
                 let anyUnrevealed = false;
                 neighbors.forEach(n => { if (!n.isRevealed && !n.isFlagged) anyUnrevealed = true; });
                 if (anyUnrevealed) clicks++;
-                neighbors.forEach(n => { if (!n.isRevealed && !n.isFlagged) handleReveal(parseInt(n.el.dataset.y), parseInt(n.el.dataset.x)); });
+                neighbors.forEach(n => { if (!n.isRevealed && !n.isFlagged) handleReveal(n.r, n.c); });
             }
         }
 
@@ -432,13 +523,291 @@
             document.getElementById('left-spacer').style.visibility = 'visible';
         }
 
+        // --- Solver Implementation ---
+
+        function getVirtualState() {
+            return board.map(row => row.map(cell => ({
+                isRevealed: cell.isRevealed,
+                isFlagged: cell.isFlagged,
+                neighborCount: cell.neighborCount,
+                r: cell.r, c: cell.c
+            })));
+        }
+
+        function checkContradiction(r, c, assumeMine) {
+            const vBoard = getVirtualState();
+            const target = vBoard[r][c];
+            if (assumeMine) target.isFlagged = true;
+            else target.isRevealed = true;
+
+            // Simple iterative solver to see if this assumption holds
+            let changed = true;
+            while (changed) {
+                changed = false;
+                for (let y = 0; y < vBoard.length; y++) {
+                    for (let x = 0; x < vBoard[0].length; x++) {
+                        const cell = vBoard[y][x];
+                        if (cell.isRevealed && cell.neighborCount > 0) {
+                            const neighbors = [];
+                            for (let dy = -1; dy <= 1; dy++) {
+                                for (let dx = -1; dx <= 1; dx++) {
+                                    if (dy === 0 && dx === 0) continue;
+                                    const ny = y + dy, nx = x + dx;
+                                    if (ny >= 0 && ny < vBoard.length && nx >= 0 && nx < vBoard[0].length) {
+                                        neighbors.push(vBoard[ny][nx]);
+                                    }
+                                }
+                            }
+                            const closed = neighbors.filter(n => !n.isRevealed && !n.isFlagged);
+                            const flags = neighbors.filter(n => n.isFlagged).length;
+                            const remaining = cell.neighborCount - flags;
+
+                            // CONTRADICTION CHECK
+                            if (remaining < 0 || remaining > closed.length) return true;
+
+                            if (remaining === 0 && closed.length > 0) {
+                                closed.forEach(n => { if (!n.isRevealed) { n.isRevealed = true; changed = true; } });
+                            } else if (remaining === closed.length && closed.length > 0) {
+                                closed.forEach(n => { if (!n.isFlagged) { n.isFlagged = true; changed = true; } });
+                            }
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        function startSolver() {
+            if (isGameOver) initGame();
+            if (solverInterval) return;
+            
+            document.getElementById('btn-start-solver').disabled = true;
+            document.getElementById('btn-stop-solver').disabled = false;
+            
+            if (isFirstClick) handleReveal(0, 0);
+            solverInterval = setInterval(solverStep, 50);
+        }
+
+        function stopSolver() {
+            if (solverInterval) {
+                clearInterval(solverInterval);
+                solverInterval = null;
+            }
+            document.getElementById('btn-start-solver').disabled = false;
+            document.getElementById('btn-stop-solver').disabled = true;
+        }
+
+        function solverStep() {
+            if (isGameOver) { stopSolver(); return; }
+
+            const moves = findSolverMoves();
+            if (moves.toFlag.length > 0) { handleFlag(moves.toFlag[0].r, moves.toFlag[0].c); return; }
+            if (moves.toReveal.length > 0) { handleReveal(moves.toReveal[0].r, moves.toReveal[0].c); return; }
+
+            const guess = findSolverGuess();
+            if (guess) handleReveal(guess.r, guess.c);
+            else stopSolver();
+        }
+
+        function findSolverMoves() {
+            let toReveal = [];
+            let toFlag = [];
+            
+            // 1. Basic & Subset logic (Fast)
+            const vBoard = getVirtualState();
+            const numCells = [];
+
+            for (let r = 0; r < board.length; r++) {
+                for (let c = 0; c < board[0].length; c++) {
+                    const cell = vBoard[r][c];
+                    if (cell.isRevealed && cell.neighborCount > 0) {
+                        const neighbors = [];
+                        for (let dr = -1; dr <= 1; dr++) {
+                            for (let dc = -1; dc <= 1; dc++) {
+                                if (dr === 0 && dc === 0) continue;
+                                const nr = r + dr, nc = c + dc;
+                                if (nr >= 0 && nr < board.length && nc >= 0 && nc < board[0].length) {
+                                    neighbors.push(vBoard[nr][nc]);
+                                }
+                            }
+                        }
+                        const closed = neighbors.filter(n => !n.isRevealed && !n.isFlagged);
+                        const flags = neighbors.filter(n => n.isFlagged).length;
+                        const remaining = cell.neighborCount - flags;
+
+                        if (remaining === 0 && closed.length > 0) {
+                            closed.forEach(n => { if (!toReveal.some(m => m.r === n.r && m.c === n.c)) toReveal.push({r: n.r, c: n.c}); });
+                        } else if (remaining === closed.length && closed.length > 0) {
+                            closed.forEach(n => { if (!toFlag.some(m => m.r === n.r && m.c === n.c)) toFlag.push({r: n.r, c: n.c}); });
+                        }
+                        if (closed.length > 0) numCells.push({ r, c, remaining, neighbors: new Set(closed) });
+                    }
+                }
+            }
+
+            if (toReveal.length > 0 || toFlag.length > 0) return { toReveal, toFlag };
+
+            // 2. Subset Analysis
+            for (let i = 0; i < numCells.length; i++) {
+                for (let j = 0; j < numCells.length; j++) {
+                    if (i === j) continue;
+                    const c1 = numCells[i], c2 = numCells[j];
+                    let isSubset = true;
+                    for (let n of c1.neighbors) { if (!c2.neighbors.has(n)) { isSubset = false; break; } }
+
+                    if (isSubset) {
+                        const extraNeighbors = [...c2.neighbors].filter(n => !c1.neighbors.has(n));
+                        if (extraNeighbors.length === 0) continue;
+                        const extraMines = c2.remaining - c1.remaining;
+                        if (extraMines === 0) {
+                            extraNeighbors.forEach(n => { if (!toReveal.some(m => m.r === n.r && m.c === n.c)) toReveal.push({r: n.r, c: n.c}); });
+                        } else if (extraMines === extraNeighbors.length) {
+                            extraNeighbors.forEach(n => { if (!toFlag.some(m => m.r === n.r && m.c === n.c)) toFlag.push({r: n.r, c: n.c}); });
+                        }
+                    }
+                }
+            }
+
+            if (toReveal.length > 0 || toFlag.length > 0) return { toReveal, toFlag };
+
+            // 3. Contradiction Check (Lookahead) - Strongest
+            const frontier = [];
+            for (let r = 0; r < board.length; r++) {
+                for (let c = 0; c < board[0].length; c++) {
+                    if (!board[r][c].isRevealed && !board[r][c].isFlagged) {
+                        const neighbors = [];
+                        for (let dr = -1; dr <= 1; dr++) {
+                            for (let dc = -1; dc <= 1; dc++) {
+                                if (dr === 0 && dc === 0) continue;
+                                const nr = r + dr, nc = c + dc;
+                                if (nr >= 0 && nr < board.length && nc >= 0 && nc < board[0].length) {
+                                    neighbors.push(board[nr][nc]);
+                                }
+                            }
+                        }
+                        if (neighbors.some(n => n.isRevealed)) frontier.push({r, c});
+                    }
+                }
+            }
+
+            for (let cell of frontier) {
+                if (checkContradiction(cell.r, cell.c, true)) { // Assuming MINE leads to error -> Must be SAFE
+                    toReveal.push(cell); return { toReveal, toFlag };
+                }
+                if (checkContradiction(cell.r, cell.c, false)) { // Assuming SAFE leads to error -> Must be MINE
+                    toFlag.push(cell); return { toReveal, toFlag };
+                }
+            }
+
+            return { toReveal, toFlag };
+        }
+
+        function findSolverGuess() {
+            const cellProbs = new Map();
+            const { rows, cols } = CONFIG[currentDifficulty];
+
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const cell = board[r][c];
+                    if (cell.isRevealed && cell.neighborCount > 0) {
+                        const neighbors = getNeighbors(r, c);
+                        const closed = neighbors.filter(n => !n.isRevealed && !n.isFlagged);
+                        const flags = neighbors.filter(n => n.isFlagged).length;
+                        const remaining = cell.neighborCount - flags;
+
+                        if (closed.length > 0) {
+                            const prob = remaining / closed.length;
+                            closed.forEach(n => {
+                                const key = `${n.r},${n.c}`;
+                                if (!cellProbs.has(key) || prob > cellProbs.get(key)) cellProbs.set(key, prob);
+                            });
+                        }
+                    }
+                }
+            }
+
+            if (cellProbs.size > 0) {
+                let bestKey = null, minProb = 2;
+                for (let [key, prob] of cellProbs) { if (prob < minProb) { minProb = prob; bestKey = key; } }
+                const [r, c] = bestKey.split(',').map(Number);
+                return board[r][c];
+            }
+
+            const allClosed = [];
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    if (!board[r][c].isRevealed && !board[r][c].isFlagged) allClosed.push(board[r][c]);
+                }
+            }
+            return allClosed.length > 0 ? allClosed[Math.floor(Math.random() * allClosed.length)] : null;
+        }
+
+        function calculateSafety(r, c) {
+            const cell = board[r][c];
+            if (cell.isRevealed || cell.isFlagged) return null;
+
+            // 1. Contradiction Check (Lookahead) - 100% or 0%
+            if (checkContradiction(r, c, true)) return 100.0;
+            if (checkContradiction(r, c, false)) return 0.0;
+
+            // 2. Fallback to basic probability
+            let minRisk = 1.0;
+            let foundConstraint = false;
+            getNeighbors(r, c).forEach(n => {
+                if (n.isRevealed && n.neighborCount > 0) {
+                    const nbNeighbors = getNeighbors(n.r, n.c);
+                    const closed = nbNeighbors.filter(nn => !nn.isRevealed && !nn.isFlagged);
+                    const flags = nbNeighbors.filter(nn => nn.isFlagged).length;
+                    const remaining = n.neighborCount - flags;
+                    if (closed.length > 0) {
+                        const risk = remaining / closed.length;
+                        if (risk < minRisk) minRisk = risk; 
+                        foundConstraint = true;
+                    }
+                }
+            });
+
+            if (!foundConstraint) {
+                const { rows, cols, mines } = CONFIG[currentDifficulty];
+                const remainingMines = mines - flaggedCount;
+                const remainingClosed = (rows * cols) - revealedCount - flaggedCount;
+                const globalRisk = remainingClosed > 0 ? remainingMines / remainingClosed : 0;
+                return Math.max(0, (1 - globalRisk) * 100);
+            }
+
+            return Math.max(0, (1 - minRisk) * 100);
+        }
+
         // Dedicated Smiley Listener
         const smileyBtn = document.getElementById('smiley');
         smileyBtn.addEventListener('click', () => {
             initGame();
         });
 
-        window.addEventListener('mouseup', () => { if (!isGameOver) setSmiley('smile'); });
+        // Space key to restart
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault(); // Prevent page scrolling
+                document.getElementById('smiley').classList.add('pressed');
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'Space') {
+                document.getElementById('smiley').classList.remove('pressed');
+                initGame();
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (isGameOver) return;
+            setSmiley('smile');
+            // Clear all visual chording hold states
+            document.querySelectorAll('.hd_active').forEach(el => {
+                el.classList.add('hd_closed');
+                el.classList.remove('hd_active');
+            });
+        });
         initGame('expert');
     </script>
 </body>

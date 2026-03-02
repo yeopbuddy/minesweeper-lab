@@ -3,7 +3,7 @@ import re
 import time
 from typing import List, Tuple, Optional, Dict, Set
 
-URL = "minesweeper-html-path"
+URL = "file:///C:/Users/kjohn/OneDrive/Desktop/prograrmming-ws/msp-ws/minesweeper.html"
 TYPE_RE = re.compile(r"hd_type([1-8])")
 
 # 상태 표현
